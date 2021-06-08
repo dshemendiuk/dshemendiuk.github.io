@@ -1,0 +1,15 @@
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+</head>
+<body>
+  <h1>It works!</h1>
+  <form action="https://login.sendpulse.com/forms/simple-form/u/eyJ1c2VyX2lkIjoyNjQ5OTIsImFkZHJlc3NfYm9va19pZCI6ODkxMjE4NjIsImxhbmciOiJydSJ9" method="post">
+    <input type="text" name="field[first_name]">
+    <input type="email" required name="email">
+    <button>Subscribe</button>
+  </form>
+</body>
+</html>
