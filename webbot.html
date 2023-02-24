@@ -25,11 +25,16 @@
     .link {
       color: var(--tg-theme-link-color);
     }
+    
+    .form-field {
+      padding: 6px 10px;
+    }
 
     .button {
+      padding: 6px 10px;
       background: var(--tg-theme-button-color);
       color: var(--tg-theme-button-text-color);
-      border: none;
+      border: 1px solid;
       font-size: 18px;
     }
 
@@ -53,18 +58,22 @@
 </head>
 <body>
   <h1>Hey</h1>
-   <div id="usercard">
-   </div>
+   
    <p class="hint">Some little hint with theme color</p>
    <!--<button id="btn" class="button">Show/Hide Main Button</button> 
    <button id="btnED" class="button">Enable/Disable Main Button</button> -->
+  <input id="num" type="number" class="form-field" value="1">
+  <button id="btnED" class="button">Submit</button>
+  
+  <div id="usercard">
+   </div>
 
   
   <script>
     let tg = window.Telegram.WebApp; 
-    console.log(tg);
+    //console.log(tg);
 
-    tg.expand(); 
+//    tg.expand(); 
 
 //     tg.MainButton.text = "Changed Text"; 
 //     tg.MainButton.setText("Changed Text1"); 
@@ -98,6 +107,12 @@
 //       //при клике на основную кнопку отправляем данные в строковом виде
 //     });
     
+    let btnED = document.getElementById("btnED"); 
+    let num = document.getElementById("num").value; 
+    
+    btnED.addEventListener('click', function(){ //вешаем событие на нажатие html-кнопки
+      tg.sendData("value:" + num); 
+    });
     
     let $usercard = document.getElementById("usercard"); //получаем блок usercard 
 
@@ -112,6 +127,8 @@
     let userdata = JSON.stringify(tg);
     $userdata.innerText = `${userdata}`; 
     $usercard.appendChild($userdata); 
+    
+    
   </script>
   </body>
 </html>
