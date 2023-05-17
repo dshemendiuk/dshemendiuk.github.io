@@ -112,7 +112,7 @@
       }
     });
     Telegram.WebApp.onEvent('mainButtonClicked', function(){
-      tg.sendData("value:" + num.value); 
+      tg.sendData('{"qtty": '+num.value+'}'); 
     });
     
     
