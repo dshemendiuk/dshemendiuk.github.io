@@ -1,0 +1,31 @@
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+</head>
+<body>
+  <h1>It works!</h1>
+  <form action="https://login.sendpulse.com/forms/simple-form/u/eyJ1c2VyX2lkIjoyNjQ5OTIsImFkZHJlc3NfYm9va19pZCI6ODkxMjE4NjIsImxhbmciOiJydSJ9" method="post">
+    <input type="text" name="field[first_name]">
+    <input type="email" required name="email">
+    <button>Subscribe</button>
+  </form>
+  
+  <script src="https://s3.eu-central-1.amazonaws.com/live-chat.sendpulse.prod/loader.js" data-live-chat-id="648b10835392bd74da082217" async></script>
+  <script type="text/javascript"> 
+    window.oSpP = { 
+     id: '2829042', 
+     notes: 'livechat.html page'
+    } 
+    document.addEventListener('spLiveChatLoaded', function() {
+        window.sp.liveChat.config({
+            primaryColor: '#4FAE7A',
+            colorScheme: 'light',
+            height: '640px',
+            lang: 'pt'
+        });
+    });
+  </script>
+</body>
+</html>
