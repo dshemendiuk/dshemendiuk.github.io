@@ -218,6 +218,7 @@
       <span id="total">0 ₴</span>
     </div>
     <button id="submit" class="submit" type="button" disabled>Відправити замовлення</button>
+    <section id="debug-panel" class="status error" hidden></section>
   </main>
   <div id="toast" class="toast" role="status"></div>
 
@@ -236,15 +237,19 @@
     const totalEl = document.getElementById("total");
     const submitButton = document.getElementById("submit");
     const toastEl = document.getElementById("toast");
+    const debugPanelEl = document.getElementById("debug-panel");
 
     const urlParams = new URLSearchParams(window.location.search);
     const contactId = urlParams.get("contact_id");
+    const debugMode = urlParams.get("debug") === "1";
 
     const state = {
       contactId,
       quantities: Object.fromEntries(PRODUCTS.map(product => [product.id, 0])),
       total: 0,
-      submitting: false
+      submitting: false,
+      statusMessage: "",
+      statusIsError: false
     };
 
     function renderStatus() {
@@ -255,8 +260,10 @@
         return;
       }
 
-      statusEl.textContent = `Підписник: ${state.contactId}`;
-      statusEl.classList.remove("error");
+      const baseText = `Підписник: ${state.contactId}`;
+      const extra = state.statusMessage ? `\n${state.statusMessage}` : "";
+      statusEl.textContent = baseText + extra;
+      statusEl.classList.toggle("error", state.statusIsError);
     }
 
     function renderProducts() {
@@ -369,6 +376,7 @@
         }));
 
       const payload = {
+        contact_id: state.contactId,
         order_items: items,
         total_amount: state.total,
         currency: "UAH",
@@ -378,23 +386,37 @@
       };
 
       try {
+        logDebug([
+          "POST " + ORDER_ENDPOINT,
+          "Headers:",
+          JSON.stringify({
+            "Content-Type": "application/json"
+          }, null, 2),
+          "Payload:",
+          JSON.stringify(payload, null, 2)
+        ].join("\n"));
+
         const response = await fetch(ORDER_ENDPOINT, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "chatbots-subscriber-id": state.contactId
+            "Content-Type": "application/json"
           },
           body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
-          throw new Error(`Помилка API: ${response.status}`);
+          const bodyText = await response.text();
+          throw new Error(`Помилка API: ${response.status} ${response.statusText || ""} — ${bodyText}`);
         }
 
+        logDebug("Відповідь API: успіх");
+        updateStatusMessage("Замовлення відправлено успішно ✅", false);
         showToast("Замовлення відправлено ✅");
         resetOrder();
       } catch (error) {
         console.error(error);
+        logDebug("Помилка: " + (error && error.message ? error.message : error));
+        updateStatusMessage("Не вдалося відправити замовлення. " + (error && error.message ? error.message : ""), true);
         showToast("Не вдалося відправити замовлення");
       } finally {
         state.submitting = false;
@@ -418,6 +440,30 @@
     renderTotals();
     updateSubmitState();
     syncInputs();
+
+    if (debugMode) {
+      debugPanelEl.hidden = false;
+      debugPanelEl.textContent = "DEBUG MODE: лог запитів з'явиться нижче.";
+    }
+
+    function logDebug(message) {
+      if (!debugMode) return;
+      const time = new Date().toLocaleTimeString();
+      const existing = debugPanelEl.textContent ? debugPanelEl.textContent + "\n\n" : "";
+      debugPanelEl.textContent = existing + `[${time}] ${message}`;
+    }
+    function logDebug(message) {
+      if (!debugMode) return;
+      const time = new Date().toLocaleTimeString();
+      const existing = debugPanelEl.textContent ? debugPanelEl.textContent + "\n\n" : "";
+      debugPanelEl.textContent = existing + `[${time}] ${message}`;
+    }
+
+    function updateStatusMessage(message, isError) {
+      state.statusMessage = message;
+      state.statusIsError = isError;
+      renderStatus();
+    }
   </script>
 </body>
 </html>
