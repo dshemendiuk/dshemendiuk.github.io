@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo Магазин</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f4f5f7;
+      color: #1f2330;
+    }
+
+    body {
+      margin: 0;
+      background-color: inherit;
+      color: inherit;
+    }
+
+    .page {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: 24px;
+      text-align: center;
+    }
+
+    .status {
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background-color: #e8f0fe;
+      color: #1a68d1;
+      border: 1px solid #cbd9f6;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .status.error {
+      background-color: #fde2e1;
+      color: #ab1f2b;
+      border-color: #f5b5b2;
+    }
+
+    .products {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid #d9dde5;
+      background-color: #ffffff;
+      box-shadow: 0 4px 20px rgba(15, 30, 60, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 13px;
+      color: #5d6473;
+    }
+
+    .card .price {
+      font-weight: 600;
+      color: #1f2330;
+    }
+
+    .quantity {
+      display: grid;
+      grid-template-columns: repeat(3, 40px);
+      gap: 4px;
+      align-items: center;
+    }
+
+    .quantity button {
+      border: none;
+      background-color: #1a68d1;
+      color: white;
+      border-radius: 10px;
+      font-size: 20px;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .quantity button:disabled {
+      background-color: #a0c4f9;
+      cursor: not-allowed;
+    }
+
+    .quantity button:hover:not(:disabled) {
+      background-color: #1555aa;
+    }
+
+    .quantity input {
+      width: 40px;
+      text-align: center;
+      border-radius: 10px;
+      border: 1px solid #cfd6e3;
+      padding: 8px;
+      font-size: 16px;
+    }
+
+    .summary {
+      margin-bottom: 24px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f8f9fb;
+      border: 1px solid #e1e3e8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .submit {
+      width: 100%;
+      padding: 14px;
+      border-radius: 14px;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, #1a68d1, #0f45a4);
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .submit:active:not(:disabled) {
+      transform: translateY(1px);
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      padding: 16px 24px;
+      border-radius: 16px;
+      background: #1a2330;
+      color: white;
+      box-shadow: 0 8px 24px rgba(15, 30, 60, 0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-in-out;
+      font-size: 14px;
+    }
+
+    .toast.visible {
+      opacity: 0.95;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        background-color: #0f1218;
+        color: #f0f2f8;
+      }
+
+      .status {
+        background-color: #1f2a3d;
+        color: #9fc5ff;
+        border-color: #3b4a64;
+      }
+
+      .status.error {
+        background-color: #3a1b1d;
+        color: #ff9ca2;
+        border-color: #5a2c31;
+      }
+
+      .card {
+        background-color: #151a23;
+        border-color: #232a36;
+        box-shadow: none;
+      }
+
+      .card p {
+        color: #abb3c2;
+      }
+
+      .summary {
+        background: #151b26;
+        border-color: #232a36;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1>Мій Телеграм-магазин</h1>
+    <div id="status" class="status"></div>
+
+    <section class="products" id="products"></section>
+    <div class="summary">
+      <span>До сплати</span>
+      <span id="total">0 ₴</span>
+    </div>
+    <button id="submit" class="submit" type="button" disabled>Відправити замовлення</button>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+
+  <script>
+    const PRODUCTS = [
+      { id: "pizza_margherita", name: "Піца Маргарита", description: "Томатний соус, моцарела, базилік", price: 220 },
+      { id: "pizza_pepperoni", name: "Піца Пепероні", description: "Салямі, томатний соус, сир", price: 260 },
+      { id: "burger_classic", name: "Бургер Класичний", description: "Яловичина, сир чеддер, бекон", price: 210 },
+      { id: "burger_veggie", name: "Бургер Veggie", description: "Фалафель, авокадо, мікс зелені", price: 190 }
+    ];
+
+    const ORDER_ENDPOINT = "https://api.sendpulse.com/events/id/230b72780acd4255ecb438b57968e5f6/264992";
+
+    const statusEl = document.getElementById("status");
+    const productsEl = document.getElementById("products");
+    const totalEl = document.getElementById("total");
+    const submitButton = document.getElementById("submit");
+    const toastEl = document.getElementById("toast");
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const contactId = urlParams.get("contact_id");
+
+    const state = {
+      contactId,
+      quantities: Object.fromEntries(PRODUCTS.map(product => [product.id, 0])),
+      total: 0,
+      submitting: false
+    };
+
+    function renderStatus() {
+      if (!state.contactId) {
+        statusEl.textContent = "contact_id не переданий у параметрах URL. Перевірте налаштування кнопки в боті.";
+        statusEl.classList.add("error");
+        submitButton.disabled = true;
+        return;
+      }
+
+      statusEl.textContent = `Підписник: ${state.contactId}`;
+      statusEl.classList.remove("error");
+    }
+
+    function renderProducts() {
+      productsEl.innerHTML = "";
+
+      PRODUCTS.forEach(product => {
+        const card = document.createElement("article");
+        card.className = "card";
+
+        const info = document.createElement("div");
+        info.innerHTML = `
+          <h2>${product.name}</h2>
+          <p>${product.description}</p>
+          <p class="price">${product.price} ₴</p>
+        `;
+
+        const quantityControls = document.createElement("div");
+        quantityControls.className = "quantity";
+
+        const minusButton = document.createElement("button");
+        minusButton.type = "button";
+        minusButton.textContent = "−";
+        minusButton.dataset.productId = product.id;
+        minusButton.addEventListener("click", () => updateQuantity(product.id, state.quantities[product.id] - 1));
+
+        const quantityInput = document.createElement("input");
+        quantityInput.type = "number";
+        quantityInput.min = "0";
+        quantityInput.value = state.quantities[product.id];
+        quantityInput.dataset.productId = product.id;
+        quantityInput.addEventListener("change", (event) => {
+          const value = Math.max(0, Number.parseInt(event.target.value, 10) || 0);
+          updateQuantity(product.id, value);
+        });
+
+        const plusButton = document.createElement("button");
+        plusButton.type = "button";
+        plusButton.textContent = "+";
+        plusButton.addEventListener("click", () => updateQuantity(product.id, state.quantities[product.id] + 1));
+
+        quantityControls.appendChild(minusButton);
+        quantityControls.appendChild(quantityInput);
+        quantityControls.appendChild(plusButton);
+
+        card.appendChild(info);
+        card.appendChild(quantityControls);
+
+        productsEl.appendChild(card);
+      });
+    }
+
+    function updateQuantity(productId, nextValue) {
+      const value = Math.max(0, nextValue);
+      state.quantities[productId] = value;
+      state.total = calculateTotal();
+      renderTotals();
+      updateSubmitState();
+      syncInputs();
+    }
+
+    function calculateTotal() {
+      return PRODUCTS.reduce((sum, product) => {
+        return sum + state.quantities[product.id] * product.price;
+      }, 0);
+    }
+
+    function renderTotals() {
+      totalEl.textContent = `${state.total} ₴`;
+    }
+
+    function updateSubmitState() {
+      const hasItems = PRODUCTS.some(product => state.quantities[product.id] > 0);
+      submitButton.disabled = !hasItems || !state.contactId || state.submitting;
+    }
+
+    function syncInputs() {
+      const inputs = productsEl.querySelectorAll("input[type='number'][data-product-id]");
+      inputs.forEach(input => {
+        const productId = input.dataset.productId;
+        input.value = state.quantities[productId];
+      });
+
+      const minusButtons = productsEl.querySelectorAll(".quantity button[data-product-id]");
+      minusButtons.forEach(button => {
+        const productId = button.dataset.productId;
+        button.disabled = state.quantities[productId] === 0;
+      });
+    }
+
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add("visible");
+      setTimeout(() => toastEl.classList.remove("visible"), 2600);
+    }
+
+    async function submitOrder() {
+      if (submitButton.disabled) return;
+
+      state.submitting = true;
+      updateSubmitState();
+
+      const items = PRODUCTS
+        .filter(product => state.quantities[product.id] > 0)
+        .map(product => ({
+          id: product.id,
+          name: product.name,
+          quantity: state.quantities[product.id],
+          price: product.price,
+          subtotal: state.quantities[product.id] * product.price
+        }));
+
+      const payload = {
+        order_items: items,
+        total_amount: state.total,
+        currency: "UAH",
+        created_at: new Date().toISOString(),
+        source: "telegram_web_app",
+        notes: "Demo замовлення"
+      };
+
+      try {
+        const response = await fetch(ORDER_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "chatbots-subscriber-id": state.contactId
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Помилка API: ${response.status}`);
+        }
+
+        showToast("Замовлення відправлено ✅");
+        resetOrder();
+      } catch (error) {
+        console.error(error);
+        showToast("Не вдалося відправити замовлення");
+      } finally {
+        state.submitting = false;
+        updateSubmitState();
+      }
+    }
+
+    function resetOrder() {
+      PRODUCTS.forEach(product => {
+        state.quantities[product.id] = 0;
+      });
+      state.total = 0;
+      syncInputs();
+      renderTotals();
+    }
+
+    submitButton.addEventListener("click", submitOrder);
+
+    renderStatus();
+    renderProducts();
+    renderTotals();
+    updateSubmitState();
+    syncInputs();
+  </script>
+</body>
+</html>
