@@ -240,7 +240,7 @@
     const debugPanelEl = document.getElementById("debug-panel");
 
     const urlParams = new URLSearchParams(window.location.search);
-    const contactId = urlParams.get("contact_id");
+    const contactId = urlParams.get("");
     const debugMode = urlParams.get("debug") === "1";
 
     const state = {
@@ -254,7 +254,7 @@
 
     function renderStatus() {
       if (!state.contactId) {
-        statusEl.textContent = "contact_id не переданий у параметрах URL. Перевірте налаштування кнопки в боті.";
+        statusEl.textContent = " не переданий у параметрах URL. Перевірте налаштування кнопки в боті.";
         statusEl.classList.add("error");
         submitButton.disabled = true;
         return;
@@ -376,7 +376,7 @@
         }));
 
       const payload = {
-        contact_id: state.contactId,
+        chatbots_subscriber_id: state.contactId,
         order_items: items,
         total_amount: state.total,
         currency: "UAH",
