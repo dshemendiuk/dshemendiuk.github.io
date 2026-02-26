@@ -256,7 +256,13 @@
         <span>{{ totalAmount }} ₴</span>
       </div>
 
-      <button class="submit" type="button" :disabled="isSubmitDisabled" @click="submitOrder">
+      <button
+        v-if="showLocalButton"
+        class="submit"
+        type="button"
+        :disabled="isSubmitDisabled"
+        @click="submitOrder"
+      >
         {{ submitButtonLabel }}
       </button>
 
@@ -292,6 +298,7 @@
             quantities,
             contactId: contactIdParam,
             debugMode: debugModeParam,
+            showLocalButton: true,
             submitting: false,
             statusMessage: '',
             statusIsError: !contactIdParam,
@@ -329,6 +336,7 @@
           this.tg = window.Telegram?.WebApp || null;
           if (this.tg) {
             this.initTelegram();
+            this.showLocalButton = false;
           }
           this.updateMainButton();
         },
