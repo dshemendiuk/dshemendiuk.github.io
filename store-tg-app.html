@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Demo Магазин</title>
+  <title>Demo Store</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.min.js"></script>
   <style>
     :root {
       color-scheme: light dark;
@@ -200,14 +201,8 @@
       outline-offset: 2px;
     }
 
-    #debug-panel {
+    [v-cloak] {
       display: none;
-      font-size: 13px;
-      white-space: pre-wrap;
-    }
-
-    body[data-debug="true"] #debug-panel {
-      display: block;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -223,399 +218,298 @@
   </style>
 </head>
 <body>
-  <main class="page">
-    <h1>Мій Телеграм-магазин</h1>
-    <div id="status" class="status"></div>
+  <div id="app" v-cloak>
+    <main class="page">
+      <h1>My Telegram Store</h1>
+      <div id="status" class="status" :class="{ error: statusIsError }">{{ statusText }}</div>
 
-    <section class="products" id="products"></section>
-    <div class="summary">
-      <span>До сплати</span>
-      <span id="total">0 ₴</span>
-    </div>
-    <button id="submit" class="submit" type="button" disabled>Відправити замовлення</button>
-    <section id="debug-panel" class="status error" hidden></section>
-  </main>
-  <div id="toast" class="toast" role="status"></div>
+      <section class="products">
+        <article class="card" v-for="product in products" :key="product.id">
+          <div class="card-info">
+            <h2>{{ product.name }}</h2>
+            <p>{{ product.description }}</p>
+            <div class="price">{{ product.price }} ₴</div>
+          </div>
+          <div class="quantity">
+            <button
+              type="button"
+              class="qty-button"
+              data-role="minus"
+              :aria-label="'Decrease quantity for ' + product.name"
+              :disabled="quantities[product.id] === 0"
+              @click="decrement(product.id)"
+            >−</button>
+            <span class="quantity-value">{{ quantities[product.id] }}</span>
+            <button
+              type="button"
+              class="qty-button"
+              data-role="plus"
+              :aria-label="'Increase quantity for ' + product.name"
+              @click="increment(product.id)"
+            >+</button>
+          </div>
+        </article>
+      </section>
+
+      <div class="summary">
+        <span>Total</span>
+        <span>{{ totalAmount }} ₴</span>
+      </div>
+
+      <button class="submit" type="button" :disabled="isSubmitDisabled" @click="submitOrder">
+        {{ submitButtonLabel }}
+      </button>
+
+      <section v-if="debugMode" class="status error">
+        {{ debugText || "DEBUG MODE: API logs will appear below." }}
+      </section>
+    </main>
+
+    <div class="toast" role="status" v-if="toastVisible">{{ toastMessage }}</div>
+  </div>
 
   <script>
-    const PRODUCTS = [
-      { id: "pizza_margherita", name: "Піца Маргарита", description: "Томатний соус, моцарела, базилік", price: 220 },
-      { id: "pizza_pepperoni", name: "Піца Пепероні", description: "Салямі, томатний соус, сир", price: 260 },
-      { id: "burger_classic", name: "Бургер Класичний", description: "Яловичина, сир чеддер, бекон", price: 210 }
-    ];
+    (function() {
+      const ORDER_ENDPOINT = "https://api.sendpulse.com/events/id/230b72780acd4255ecb438b57968e5f6/264992";
+      const urlParams = new URLSearchParams(window.location.search);
+      const contactIdParam = urlParams.get('contact_id') || '';
+      const debugModeParam = urlParams.get('debug') === '1';
 
-    const ORDER_ENDPOINT = "https://api.sendpulse.com/events/id/230b72780acd4255ecb438b57968e5f6/264992";
-
-    const statusEl = document.getElementById("status");
-    const productsEl = document.getElementById("products");
-    const totalEl = document.getElementById("total");
-    const submitButton = document.getElementById("submit");
-    const toastEl = document.getElementById("toast");
-    const debugPanelEl = document.getElementById("debug-panel");
-    const tg = window.Telegram?.WebApp || null;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const contactId = urlParams.get("contact_id");
-    const debugMode = urlParams.get("debug") === "1";
-
-    const themeState = {
-      buttonColor: null,
-      buttonTextColor: null
-    };
-
-    const state = {
-      contactId,
-      quantities: Object.fromEntries(PRODUCTS.map(product => [product.id, 0])),
-      total: 0,
-      submitting: false,
-      statusMessage: "",
-      statusIsError: false
-    };
-
-    setupTelegramExperience();
-
-    function renderStatus() {
-      if (!state.contactId) {
-        statusEl.textContent = "contact_id не переданий у параметрах URL. Перевірте налаштування кнопки в боті.";
-        state.statusIsError = true;
-        statusEl.classList.add("error");
-        submitButton.disabled = true;
-        return;
-      }
-
-      const baseText = `Підписник: ${state.contactId}`;
-      const extra = state.statusMessage ? `\n${state.statusMessage}` : "";
-      statusEl.textContent = baseText + extra;
-      statusEl.classList.toggle("error", state.statusIsError);
-    }
-
-    function renderProducts() {
-      productsEl.innerHTML = "";
-
-      PRODUCTS.forEach(product => {
-        const card = document.createElement("article");
-        card.className = "card";
-
-        const info = document.createElement("div");
-        info.className = "card-info";
-        info.innerHTML = `
-          <h2>${product.name}</h2>
-          <p>${product.description}</p>
-          <div class="price">${product.price} ₴</div>
-        `;
-
-        const quantityControls = document.createElement("div");
-        quantityControls.className = "quantity";
-
-        const minusButton = document.createElement("button");
-        minusButton.type = "button";
-        minusButton.textContent = "−";
-        minusButton.dataset.productId = product.id;
-        minusButton.dataset.role = "minus";
-        minusButton.setAttribute("aria-label", `Зменшити кількість для ${product.name}`);
-        minusButton.addEventListener("click", () => updateQuantity(product.id, state.quantities[product.id] - 1));
-
-        const quantityValue = document.createElement("span");
-        quantityValue.className = "quantity-value";
-        quantityValue.dataset.productId = product.id;
-        quantityValue.textContent = state.quantities[product.id];
-
-        const plusButton = document.createElement("button");
-        plusButton.type = "button";
-        plusButton.textContent = "+";
-        plusButton.setAttribute("aria-label", `Збільшити кількість для ${product.name}`);
-        plusButton.addEventListener("click", () => updateQuantity(product.id, state.quantities[product.id] + 1));
-
-        quantityControls.append(minusButton, quantityValue, plusButton);
-
-        card.append(info, quantityControls);
-
-        productsEl.append(card);
-      });
-    }
-
-    function updateQuantity(productId, nextValue) {
-      const value = Math.max(0, nextValue);
-      state.quantities[productId] = value;
-      state.total = calculateTotal();
-      renderTotals();
-      updateSubmitState();
-      syncQuantities();
-    }
-
-    function calculateTotal() {
-      return PRODUCTS.reduce((sum, product) => {
-        return sum + state.quantities[product.id] * product.price;
-      }, 0);
-    }
-
-    function renderTotals() {
-      totalEl.textContent = `${state.total} ₴`;
-    }
-
-    function updateSubmitState() {
-      const hasItems = PRODUCTS.some(product => state.quantities[product.id] > 0);
-      const ready = hasItems && Boolean(state.contactId);
-      const disabled = !ready || state.submitting;
-      submitButton.disabled = disabled;
-      submitButton.textContent = state.submitting ? "Відправка..." : "Відправити замовлення";
-
-      if (tg) {
-        if (!ready) {
-          tg.MainButton.hideProgress?.();
-          tg.MainButton.hide();
-        } else {
-          const { color, textColor } = getButtonColors();
-          tg.MainButton.setParams({
-            text: state.submitting ? "Відправка..." : "Відправити замовлення",
-            color,
-            text_color: textColor
+      new Vue({
+        el: '#app',
+        data() {
+          const products = [
+            { id: 'pizza_margherita', name: 'Pizza Margherita', description: 'Tomato sauce, mozzarella, basil', price: 220 },
+            { id: 'pizza_pepperoni', name: 'Pizza Pepperoni', description: 'Salami, tomato sauce, cheese', price: 260 },
+            { id: 'burger_classic', name: 'Classic Burger', description: 'Beef patty, cheddar cheese, bacon', price: 210 }
+          ];
+          const quantities = {};
+          products.forEach(product => {
+            quantities[product.id] = 0;
           });
-          if (state.submitting) {
-            tg.MainButton.showProgress?.();
-          } else {
-            tg.MainButton.hideProgress?.();
-          }
-          tg.MainButton.show();
-        }
-      }
-    }
-
-    function syncQuantities() {
-      const values = productsEl.querySelectorAll(".quantity-value[data-product-id]");
-      values.forEach(valueEl => {
-        const productId = valueEl.dataset.productId;
-        valueEl.textContent = state.quantities[productId];
-      });
-
-      const minusButtons = productsEl.querySelectorAll(".quantity button[data-role='minus'][data-product-id]");
-      minusButtons.forEach(button => {
-        const productId = button.dataset.productId;
-        button.disabled = state.quantities[productId] === 0;
-      });
-    }
-
-    function showToast(message) {
-      toastEl.textContent = message;
-      toastEl.classList.add("visible");
-      setTimeout(() => toastEl.classList.remove("visible"), 2600);
-    }
-
-    async function submitOrder() {
-      if (state.submitting) return;
-      if (submitButton.disabled && !tg) return;
-
-      state.submitting = true;
-      updateSubmitState();
-      if (tg) {
-        tg.HapticFeedback?.impactOccurred?.("medium");
-      }
-
-      const items = PRODUCTS
-        .filter(product => state.quantities[product.id] > 0)
-        .map(product => ({
-          id: product.id,
-          name: product.name,
-          quantity: state.quantities[product.id],
-          price: product.price,
-          subtotal: state.quantities[product.id] * product.price
-        }));
-
-      const payload = {
-        chatbots_subscriber_id: state.contactId,
-        order_items: items,
-        total_amount: state.total,
-        currency: "UAH",
-        created_at: new Date().toISOString(),
-        source: "telegram_web_app",
-        notes: "Demo замовлення"
-      };
-
-      try {
-        logDebug([
-          "POST " + ORDER_ENDPOINT,
-          "Headers:",
-          JSON.stringify({
-            "Content-Type": "application/json"
-          }, null, 2),
-          "Payload:",
-          JSON.stringify(payload, null, 2)
-        ].join("\n"));
-
-        const response = await fetch(ORDER_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const bodyText = await response.text();
-          throw new Error(`Помилка API: ${response.status} ${response.statusText || ""} — ${bodyText}`);
-        }
-
-        logDebug("Відповідь API: успіх");
-        updateStatusMessage("Замовлення відправлено успішно ✅", false);
-        showToast("Замовлення відправлено ✅");
-        if (tg) {
-          tg.HapticFeedback?.notificationOccurred?.("success");
-        }
-        resetOrder();
-        if (tg && !debugMode) {
-          tg.MainButton.hideProgress?.();
-          tg.MainButton.hide();
-          setTimeout(() => {
-            try {
-              tg.close();
-            } catch (closeError) {
-              logDebug("Не вдалося закрити WebApp: " + closeError);
+          return {
+            products,
+            quantities,
+            contactId: contactIdParam,
+            debugMode: debugModeParam,
+            submitting: false,
+            statusMessage: '',
+            statusIsError: !contactIdParam,
+            debugLogs: [],
+            toastMessage: '',
+            toastVisible: false,
+            tg: null,
+            toastTimer: null
+          };
+        },
+        computed: {
+          statusText() {
+            if (!this.contactId) {
+              return 'contact_id is missing in the URL parameters. Check the bot button configuration.';
             }
-          }, 600);
-        }
-      } catch (error) {
-        console.error(error);
-        logDebug("Помилка: " + (error && error.message ? error.message : error));
-        updateStatusMessage("Не вдалося відправити замовлення. " + (error && error.message ? error.message : ""), true);
-        showToast("Не вдалося відправити замовлення");
-        if (tg) {
-          tg.HapticFeedback?.notificationOccurred?.("error");
-        }
-      } finally {
-        state.submitting = false;
-        updateSubmitState();
-      }
-    }
+            return `Subscriber: ${this.contactId}${this.statusMessage ? '\\n' + this.statusMessage : ''}`;
+          },
+          totalAmount() {
+            return this.products.reduce((sum, product) => sum + this.quantities[product.id] * product.price, 0);
+          },
+          hasItems() {
+            return this.products.some(product => this.quantities[product.id] > 0);
+          },
+          isSubmitDisabled() {
+            return !this.contactId || this.submitting || !this.hasItems;
+          },
+          submitButtonLabel() {
+            return this.submitting ? 'Sending...' : 'Submit Order';
+          },
+          debugText() {
+            return this.debugLogs.join('\\n\\n');
+          }
+        },
+        mounted() {
+          this.tg = window.Telegram?.WebApp || null;
+          if (this.tg) {
+            this.initTelegram();
+          }
+          this.updateMainButton();
+        },
+        methods: {
+          increment(productId) {
+            this.quantities[productId] += 1;
+            this.updateMainButton();
+          },
+          decrement(productId) {
+            if (this.quantities[productId] === 0) return;
+            this.quantities[productId] -= 1;
+            this.updateMainButton();
+          },
+          updateMainButton() {
+            if (!this.tg) return;
+            const ready = !this.isSubmitDisabled;
+            if (!ready) {
+              this.tg.MainButton.hideProgress?.();
+              this.tg.MainButton.hide();
+              return;
+            }
+            const params = this.tg.themeParams || {};
+            const computedStyle = getComputedStyle(document.documentElement);
+            this.tg.MainButton.setParams({
+              text: this.submitButtonLabel,
+              color: params.button_color || computedStyle.getPropertyValue('--tg-theme-button-color') || '#1a68d1',
+              text_color: params.button_text_color || computedStyle.getPropertyValue('--tg-theme-button-text-color') || '#ffffff'
+            });
+            if (this.submitting) {
+              this.tg.MainButton.showProgress?.();
+            } else {
+              this.tg.MainButton.hideProgress?.();
+            }
+            this.tg.MainButton.show();
+          },
+          logDebug(message) {
+            if (!this.debugMode) return;
+            const time = new Date().toLocaleTimeString();
+            this.debugLogs.push(`[${time}] ${message}`);
+          },
+          showToast(message) {
+            this.toastMessage = message;
+            this.toastVisible = true;
+            clearTimeout(this.toastTimer);
+            this.toastTimer = setTimeout(() => {
+              this.toastVisible = false;
+            }, 2600);
+          },
+          async submitOrder() {
+            if (this.isSubmitDisabled) return;
 
-    function resetOrder() {
-      PRODUCTS.forEach(product => {
-        state.quantities[product.id] = 0;
+            this.submitting = true;
+            this.updateMainButton();
+            this.logDebug('Preparing payload for submission');
+
+            const items = this.products
+              .filter(product => this.quantities[product.id] > 0)
+              .map(product => ({
+                id: product.id,
+                name: product.name,
+                quantity: this.quantities[product.id],
+                price: product.price,
+                subtotal: this.quantities[product.id] * product.price
+              }));
+
+            const payload = {
+              chatbots_subscriber_id: this.contactId,
+              order_items: items,
+              total_amount: this.totalAmount,
+              currency: 'UAH',
+              created_at: new Date().toISOString(),
+              source: 'telegram_web_app',
+              notes: 'Demo order'
+            };
+
+            this.logDebug(
+              [
+                `POST ${ORDER_ENDPOINT}`,
+                'Headers:',
+                JSON.stringify({ 'Content-Type': 'application/json' }, null, 2),
+                'Payload:',
+                JSON.stringify(payload, null, 2)
+              ].join('\\n')
+            );
+
+            try {
+              const response = await fetch(ORDER_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                const bodyText = await response.text();
+                throw new Error(`API error: ${response.status} ${response.statusText || ''} — ${bodyText}`);
+              }
+
+              this.logDebug('API response: success');
+              this.statusMessage = 'Order submitted successfully ✅';
+              this.statusIsError = false;
+              this.showToast('Order submitted ✅');
+              if (this.tg) {
+                this.tg.HapticFeedback?.notificationOccurred?.('success');
+              }
+              this.resetOrder();
+              if (this.tg && !this.debugMode) {
+                this.tg.MainButton.hideProgress?.();
+                this.tg.MainButton.hide();
+                setTimeout(() => {
+                  try {
+                    this.tg.close();
+                  } catch (error) {
+                    this.logDebug('Failed to close WebApp: ' + error);
+                  }
+                }, 600);
+              }
+            } catch (error) {
+              console.error(error);
+              this.logDebug('Error: ' + (error && error.message ? error.message : error));
+              this.statusMessage = 'Failed to submit the order. ' + (error && error.message ? error.message : '');
+              this.statusIsError = true;
+              this.showToast('Failed to submit the order');
+              if (this.tg) {
+                this.tg.HapticFeedback?.notificationOccurred?.('error');
+              }
+            } finally {
+              this.submitting = false;
+              this.updateMainButton();
+            }
+          },
+          resetOrder() {
+            Object.keys(this.quantities).forEach(productId => {
+              this.quantities[productId] = 0;
+            });
+          },
+          initTelegram() {
+            const tg = this.tg;
+            tg.ready();
+            tg.expand?.();
+
+            const applyTheme = () => {
+              const root = document.documentElement;
+              const params = tg.themeParams || {};
+              const map = {
+                bg_color: '--tg-theme-bg-color',
+                text_color: '--tg-theme-text-color',
+                hint_color: '--tg-theme-hint-color',
+                link_color: '--tg-theme-link-color',
+                button_color: '--tg-theme-button-color',
+                button_text_color: '--tg-theme-button-text-color',
+                secondary_bg_color: '--tg-theme-secondary-bg-color',
+                destructive_text_color: '--tg-theme-destructive-text-color'
+              };
+              Object.entries(map).forEach(([key, cssVar]) => {
+                if (params[key]) {
+                  root.style.setProperty(cssVar, params[key]);
+                }
+              });
+            };
+
+            applyTheme();
+            tg.onEvent?.('themeChanged', applyTheme);
+            tg.MainButton.setText(this.submitButtonLabel);
+            tg.MainButton.onClick(() => this.submitOrder());
+          }
+        },
+        watch: {
+          quantities: {
+            deep: true,
+            handler() {
+              this.updateMainButton();
+            }
+          },
+          submitting() {
+            this.updateMainButton();
+          }
+        }
       });
-      state.total = 0;
-      syncQuantities();
-      renderTotals();
-    }
-
-    submitButton.addEventListener("click", submitOrder);
-
-    renderStatus();
-    renderProducts();
-    renderTotals();
-    updateSubmitState();
-    syncQuantities();
-
-    if (debugMode) {
-      debugPanelEl.hidden = false;
-      debugPanelEl.textContent = "DEBUG MODE: лог запитів з'явиться нижче.";
-      document.body.dataset.debug = "true";
-    } else {
-      delete document.body.dataset.debug;
-    }
-
-    function logDebug(message) {
-      if (!debugMode) return;
-      const time = new Date().toLocaleTimeString();
-      const existing = debugPanelEl.textContent ? debugPanelEl.textContent + "\n\n" : "";
-      debugPanelEl.textContent = existing + `[${time}] ${message}`;
-    }
-
-    function updateStatusMessage(message, isError) {
-      state.statusMessage = message;
-      state.statusIsError = isError;
-      renderStatus();
-    }
-
-    function setupTelegramExperience() {
-      if (!tg) return;
-
-      tg.ready();
-      tg.expand?.();
-      applyThemeParams(tg.themeParams || {});
-      tg.onEvent?.("themeChanged", () => {
-        applyThemeParams(tg.themeParams || {});
-        updateSubmitState();
-      });
-
-      submitButton.style.display = "none";
-      submitButton.setAttribute("aria-hidden", "true");
-      submitButton.tabIndex = -1;
-
-      tg.MainButton.setText("Відправити замовлення");
-      tg.MainButton.onClick(submitOrder);
-      tg.MainButton.hide();
-
-      if (tg.colorScheme) {
-        document.documentElement.style.colorScheme = tg.colorScheme;
-      }
-
-      logDebug("Telegram WebApp API доступний, нативні елементи активовано.");
-    }
-
-    function applyThemeParams(params) {
-      const root = document.documentElement;
-      const map = {
-        bg_color: "--tg-theme-bg-color",
-        text_color: "--tg-theme-text-color",
-        hint_color: "--tg-theme-hint-color",
-        link_color: "--tg-theme-link-color",
-        button_color: "--tg-theme-button-color",
-        button_text_color: "--tg-theme-button-text-color",
-        secondary_bg_color: "--tg-theme-secondary-bg-color",
-        destructive_text_color: "--tg-theme-destructive-text-color"
-      };
-
-      Object.entries(map).forEach(([key, cssVar]) => {
-        if (params[key]) {
-          root.style.setProperty(cssVar, params[key]);
-        }
-      });
-
-      if (params.secondary_bg_color) {
-        const stroke = adjustColor(params.secondary_bg_color, -12) || "rgba(31, 35, 48, 0.08)";
-        root.style.setProperty("--card-border-color", stroke);
-        root.style.setProperty("--surface-border-color", stroke);
-      }
-
-      if (params.bg_color) {
-        const toastColor = adjustColor(params.bg_color, -32);
-        if (toastColor) {
-          root.style.setProperty("--toast-bg-color", toastColor);
-        }
-      }
-
-      const computed = getComputedStyle(root);
-      themeState.buttonColor = (params.button_color || computed.getPropertyValue("--tg-theme-button-color")).trim();
-      themeState.buttonTextColor = (params.button_text_color || computed.getPropertyValue("--tg-theme-button-text-color")).trim();
-
-      const active = adjustColor(themeState.buttonColor, -18);
-      if (active) {
-        root.style.setProperty("--button-active-color", active);
-      }
-    }
-
-    function getButtonColors() {
-      const computed = getComputedStyle(document.documentElement);
-      const color = (themeState.buttonColor || computed.getPropertyValue("--tg-theme-button-color") || "#1a68d1").trim();
-      const textColor = (themeState.buttonTextColor || computed.getPropertyValue("--tg-theme-button-text-color") || "#ffffff").trim();
-      return { color, textColor };
-    }
-
-    function adjustColor(hexColor, percent) {
-      const hexMatch = /^#([0-9a-f]{6})$/i.exec(hexColor || "");
-      if (!hexMatch) return null;
-      const num = parseInt(hexMatch[1], 16);
-      let r = (num >> 16) & 0xff;
-      let g = (num >> 8) & 0xff;
-      let b = num & 0xff;
-
-      const factor = (100 + percent) / 100;
-      r = Math.min(255, Math.max(0, Math.round(r * factor)));
-      g = Math.min(255, Math.max(0, Math.round(g * factor)));
-      b = Math.min(255, Math.max(0, Math.round(b * factor)));
-
-      const toHex = value => value.toString(16).padStart(2, "0");
-      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-    }
+    })();
   </script>
 </body>
 </html>
